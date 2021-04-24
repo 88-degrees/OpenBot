@@ -3,11 +3,16 @@
 *.ap_
 *.aab
 
+*.txt
+
 # Files for the ART/Dalvik VM
 *.dex
 
 # Java class files
 *.class
+
+# Network files
+*.tflite
 
 # Generated files
 bin/

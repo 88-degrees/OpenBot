@@ -1,28 +1,61 @@
-# Android App
+# Android Apps
 
-Our application is derived from the [TensorFlow Lite Object Detection Android Demo](https://github.com/tensorflow/examples/tree/master/lite/examples/object_detection/android). We add a data logger and support for game controllers to collect datasets with the robot. Currently, we record readings from following sensors: camera, gyroscope, accelerometer, magnetometer, ambient light sensor, and barometer. Using the Android API, we are able to obtain the following sensor readings: RGB images, angular speed, linear acceleration, gravity, magnetic field strength, light intensity, atmospheric pressure, latitude, longitude, altitude, bearing, and speed. In addition to the phone sensors, we also record body sensor readings (wheel odometry, obstacle distance and battery voltage), which are transmitted via the serial link. Lastly, we record control commands received from a connected game controller, if present. We also integrate several neural networks for person following and autonomous navigation.
+<p align="center">
+  <span>English</span> |
+  <a href="README_CN.md">简体中文</a>
+</p>
 
-## Getting Started
+## Features
+
+Click on the links below to read about the features of the apps.
+
+- [OpenBot app](app/README.md)
+- [Controller app](controller/README.md)
+
+## Install the apps
+
+The easiest way to get either of the apps is to download it directly to the phone using the corresponding QR code. If you are on the phone browser, you can also just click on the QR code. You can then open the apk on your phone and [install](https://www.lifewire.com/install-apk-on-android-4177185) it. Note that the apk is only signed with a debug key.
+
+<table style="width:100%;border:none;text-align:center">
+  <tr>
+    <td>  <a href="https://app.openbot.org/robot" target="_blank">
+    <img alt="Robot App" width="50%" src="../docs/images/robot_app_qr_code.png" style ="padding-right: 50%;" />
+  </a>
+    </td>
+    <td>
+  <a href="https://app.openbot.org/controller" target="_blank">
+    <img alt="Controller App" width="50%" src="../docs/images/controller_app_qr_code.png" />
+  </a>
+      </td>
+  </tr>
+  <tr>
+    <td>Robot App</td>
+    <td>Controller App</td>
+  </tr>
+</table>
+
+
+Alternatively, you can download the apks from the assets of any [release](https://github.com/intel-isl/OpenBot/releases). If you want the latest app from the master branch, you can also download it from the build artifacts [here](https://github.com/intel-isl/OpenBot/actions?query=workflow%3A%22Java+CI+with+Gradle%22). Note, that it may not be stable. If you would like to make changes to the app later, follow the steps below to compile the app and deploy it on your phone.
+
+## Build the apps
 
 ### Prerequisites
 
-- Setup [Android Studio](https://developer.android.com/studio/index.html)
-- Android device and Android development environment with minimum API 21
-- Android Studio 3.2 or later
+- [Android Studio 3.2 or later](https://developer.android.com/studio/index.html) for building and installing the apks.
+- Android device and Android development environment with minimum API 21.
+- Currently, we use API 30 as compile SDK and API 29 as target SDK. It should get installed automatically, but if not you can install the SDK manually. Go to Android Studio -> Preferences -> Appearance & Behaviour -> System Settings -> Android SDK. Make sure API 30 is checked and click apply.
 
-### Building
-- Open Android Studio and select *Open an existing Android Studio project*.
-- Select the OpenBot/android directory and click OK.
-- Confirm Gradle Sync if neccessary.
-- Connect your Android device and make sure USB Debugging in the [developer options](https://developer.android.com/studio/debug/dev-options) is enabled. Depending on your development environment [further steps](https://developer.android.com/studio/run/device) might be necessary.
-- Click the Run button (the green arrow) or select Run > Run 'android' from the top menu. You may need to rebuild the project using Build > Rebuild Project.
-- If it asks you to use Instant Run, click *Proceed Without Instant Run*.
+![Android SDK](../docs/images/android_studio_sdk.jpg)
 
-### Code Structure
-The [TensorFlow Lite Object Detection Android Demo](https://github.com/tensorflow/examples/tree/master/lite/examples/object_detection/android) was used as starting point to integrate TFLite models and obtain the camera feed. The main activity is the [NetworkActivity](app/src/main/java/org/openbot/NetworkActivity.java) which runs the main thread. It inherits from the [CameraActivity](app/src/main/java/org/openbot/CameraActivity.java) which manages the camera and UI. The [SensorService](app/src/main/java/org/openbot/SensorService.java) reads all other phone sensors and logs them. The [env](app/src/main/java/org/openbot/env) folder contains utility classes such as the [GameController](app/src/main/java/org/openbot/env/GameController.java) interface and an [AudioPlayer](app/src/main/java/org/openbot/env/AudioPlayer.java) for the audible feedback. The [tflite](app/src/main/java/org/openbot/tflite) folder contains the model definitions for the [Autopilot](app/src/main/java/org/openbot/tflite/Autopilot.java) and [Detector](app/src/main/java/org/openbot/tflite/Detector.java) networks.
+### Build process
 
-## How to Use the App
-Coming soon...
-<p align="center">
-  <img src="../docs/images/app_teaser.jpg" alt="App Teaser" width="100%"/>
-</p>
+1. Open Android Studio and select *Open an existing Android Studio project*.
+2. Select the OpenBot/android directory and click OK.
+3. If you want to install the [OpenBot app](app/README.md) make sure to select the *app* configuration. If you want to install the [Controller app](controller/README.md), select the *controller* configuration. Confirm Gradle Sync if neccessary. To perform a Gradle Sync manually, click on the gradle icon.
+  ![Gradle Sync](../docs/images/android_studio_bar_gradle.jpg)
+4. Connect your Android device and make sure USB Debugging in the [developer options](https://developer.android.com/studio/debug/dev-options) is enabled. Depending on your development environment [further steps](https://developer.android.com/studio/run/device) might be necessary. You should see your device in the navigation bar at the top now.
+  ![Phone](../docs/images/android_studio_bar_phone.jpg)
+5. Click the Run button (the green arrow) or select Run > Run 'android' from the top menu. You may need to rebuild the project using Build > Rebuild Project.
+  ![Run](../docs/images/android_studio_bar_run.jpg)
+6. If it asks you to use Instant Run, click *Proceed Without Instant Run*.
+

@@ -6,13 +6,29 @@
     <string name="camera_permission_denied">Camera permission is necessary to run this application.</string>
     <string name="camera_error">This device doesn\'t support Camera2 API.</string>
     <string name="threads">Threads</string>
-    <string name="location_permission_denied">Location permission is necessary for logging.</string>
+    <string name="location_permission_denied_logging">Location permission is necessary for logging GPS data.</string>
+    <string name="location_permission_denied_controller">Location permission is necessary for finding the controller phone.</string>
     <string name="storage_permission_denied">External storage permission is necessary for logging.</string>
+    <string name="record_audio_permission_denied_controller">Recording audio is necessary for sending Audio/Visual stream to the controller.</string>
+    <string name="off">Off</string>
+    <string name="on">On</string>
+
     <string name="model">Model</string>
     <string-array name="models">
-        <item>DETECTOR_V1_1_0_Q</item>
-        <item>DETECTOR_V3_S_Q</item>
-        <item>AUTOPILOT_F</item>
+        <item>Autopilot_F</item>
+        <item>MobileNetV1_1_0_Q</item>
+        <item>MobileNetV3_S_Q</item>
+        <item>YoloV4</item>
+    </string-array>
+
+    <string-array name="autopilot_models">
+        <item>Autopilot_F</item>
+    </string-array>
+
+    <string-array name="detector_models">
+        <item>MobileNetV1_1_0_Q</item>
+        <item>MobileNetV3_S_Q</item>
+        <item>YoloV4</item>
     </string-array>
 
     <string name="device">Device</string>
@@ -35,19 +51,78 @@
         <item>921600</item>
     </string-array>
 
-    <string name="logger_setting">Logger Setting</string>
-    <string-array name="logger_settings">
+    <string-array name="log_settings">
         <item>all_imgs</item>
         <item>crop_img</item>
         <item>preview_img</item>
         <item>only_sensors</item>
     </string-array>
 
-    <string name="drive_mode">Drive Mode</string>
+    <string-array name="control_modes">
+        <item>Gamepad</item>
+        <item>Phone</item>
+        <!--        <item>WebRTC</item>-->
+    </string-array>
+
     <string-array name="drive_modes">
         <item>Dual</item>
         <item>Game</item>
         <item>Joystick</item>
     </string-array>
+
+    <string-array name="preview_resolutions">
+        <item>Low</item>
+        <item>Medium</item>
+        <item>High</item>
+    </string-array>
+
+    <string name="log_setting">Log Setting</string>
+    <string name="camera_facing_back">Back</string>
+    <string name="camera_facing_front">Front</string>
+    <string name="logging">Logging</string>
+    <string name="not_logging">Not Logging</string>
+    <string name="no_device">No Device</string>
+    <string name="data_log">Data Log</string>
+    <string name="usb_connection">USB Connection</string>
+    <string name="camera">Camera</string>
+    <string name="control">Control</string>
+    <string name="battery">Battery</string>
+    <string name="speed">Speed (l,r)</string>
+    <string name="sonar">Sonar</string>
+    <string name="control_info">***,***</string>
+    <string name="rpm">***,*** rpm</string>
+    <string name="voltage">**.* V</string>
+    <string name="distance">*** cm</string>
+    <string name="time_ms">*** ms</string>
+    <string name="time_fps">*** fps</string>
+    <string name="resolution">*** x ***</string>
+    <string name="drive_mode">Drive Mode</string>
+    <string name="speed_mode">Speed Mode</string>
+    <string name="plus">plus</string>
+    <string name="arrow">arrow</string>
+    <string name="minus">minus</string>
+    <string name="controller">Controller</string>
+    <string name="control_mode">Control Mode</string>
+    <string name="crop">Crop</string>
+    <string name="frame">Frame</string>
+    <string name="_1">1</string>
+    <string name="settings">Settings</string>
+    <string name="inference">Speed</string>
+    <string name="input">Input</string>
+    <string name="confidence">Confidence</string>
+    <string name="object">Object</string>
+    <string-array name="speed_modes">
+        <item>Slow</item>
+        <item>Normal</item>
+        <item>Fast</item>
+    </string-array>
+
+    <string name="speedTitle">Speed</string>
+    <string name="voltageInfo">%1$s V</string>
+    <string name="speedInfo">%1$s rpm</string>
+    <string name="distanceInfo">%1$s cm</string>
+    <string name="preview_resolution">Preview Resolution</string>
+    <string name="file_available_body">A model with the same name already exists. Would you like to replace it?</string>
+    <string name="file_available_title">File found</string>
 
 </resources>

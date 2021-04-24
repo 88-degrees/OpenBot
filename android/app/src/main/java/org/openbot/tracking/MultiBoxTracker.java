@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-//Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
+// Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
 
 package org.openbot.tracking;
 
@@ -31,12 +31,13 @@ import android.util.Pair;
 import android.util.TypedValue;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Queue;
 import org.openbot.env.BorderedText;
+import org.openbot.env.Control;
 import org.openbot.env.ImageUtils;
 import org.openbot.env.Logger;
 import org.openbot.tflite.Detector.Recognition;
-import org.openbot.CameraActivity.ControlSignal;
 
 /** A tracker that handles non-max suppression and matches existing objects to new detections. */
 public class MultiBoxTracker {
@@ -70,8 +71,8 @@ public class MultiBoxTracker {
   private int frameWidth;
   private int frameHeight;
   private int sensorOrientation;
-  private int leftControl;
-  private int rightControl;
+  private float leftControl;
+  private float rightControl;
 
   public MultiBoxTracker(final Context context) {
     for (final int color : COLORS) {
@@ -128,54 +129,54 @@ public class MultiBoxTracker {
   private void updateFrameToCanvasMatrix(int canvasHeight, int canvasWidth) {
     final boolean rotated = sensorOrientation % 180 == 90;
     final float multiplier =
-            Math.min(
-                    canvasHeight / (float) (rotated ? frameWidth : frameHeight),
-                    canvasWidth / (float) (rotated ? frameHeight : frameWidth));
+        Math.min(
+            canvasHeight / (float) (rotated ? frameWidth : frameHeight),
+            canvasWidth / (float) (rotated ? frameHeight : frameWidth));
     frameToCanvasMatrix =
-            ImageUtils.getTransformationMatrix(
-                    frameWidth,
-                    frameHeight,
-                    (int) (multiplier * (rotated ? frameHeight : frameWidth)),
-                    (int) (multiplier * (rotated ? frameWidth : frameHeight)),
-                    sensorOrientation,
-                    new RectF(0,0,0,0),
-                    false);
+        ImageUtils.getTransformationMatrix(
+            frameWidth,
+            frameHeight,
+            (int) (multiplier * (rotated ? frameHeight : frameWidth)),
+            (int) (multiplier * (rotated ? frameWidth : frameHeight)),
+            sensorOrientation,
+            new RectF(0, 0, 0, 0),
+            false);
   }
 
-
-  public synchronized ControlSignal updateTarget() {
+  public synchronized Control updateTarget() {
     if (!trackedObjects.isEmpty()) {
-      //Pick person with highest probability
+      // Pick person with highest probability
       final RectF trackedPos = new RectF(trackedObjects.get(0).location);
       final boolean rotated = sensorOrientation % 180 == 90;
       float imgWidth = (float) (rotated ? frameHeight : frameWidth);
       float centerX = (rotated ? trackedPos.centerY() : trackedPos.centerX());
-      //Make sure object center is in frame
-      centerX = Math.max(0, Math.min(centerX, imgWidth));
-      //Scale relative position along x-axis between -1 and 1
+      // Make sure object center is in frame
+      centerX = Math.max(0.0f, Math.min(centerX, imgWidth));
+      // Scale relative position along x-axis between -1 and 1
       float x_pos_norm = 1.0f - 2.0f * centerX / imgWidth;
-      //Scale to control signal and account for rotation
-      double x_pos_scaled = rotated ? -x_pos_norm * 255.0f : x_pos_norm * 255.0f;
-      ////Scale by "exponential" function: y = x / sqrt(1-x^2)
-      //Math.max (Math.min(x_pos_norm / Math.sqrt(1 - x_pos_norm * x_pos_norm),2),-2) * 255.0f;
+      // Scale to control signal and account for rotation
+      float x_pos_scaled = rotated ? -x_pos_norm * 1.0f : x_pos_norm * 1.0f;
+      //// Scale by "exponential" function: y = x / sqrt(1-x^2)
+      // Math.max (Math.min(x_pos_norm / Math.sqrt(1 - x_pos_norm * x_pos_norm),2),-2) * 255.0f;
 
       if (x_pos_scaled < 0) {
-        leftControl = 255;
-        rightControl = (int) (255.0f + x_pos_scaled);
+        leftControl = 1.0f;
+        rightControl = 1.0f + x_pos_scaled;
       } else {
-        leftControl = (int) (255.0f - x_pos_scaled);
-        rightControl = 255;
+        leftControl = 1.0f - x_pos_scaled;
+        rightControl = 1.0f;
       }
+    } else {
+      leftControl = 0.0f;
+      rightControl = 0.0f;
     }
-    else {
-      leftControl = 0;
-      rightControl = 0;
-    }
-    return new ControlSignal(leftControl, rightControl);
+    return new Control(
+        (0 > sensorOrientation) ? rightControl : leftControl,
+        (0 > sensorOrientation) ? leftControl : rightControl);
   }
 
   public synchronized void draw(final Canvas canvas) {
-    updateFrameToCanvasMatrix(canvas.getHeight(),canvas.getWidth());
+    updateFrameToCanvasMatrix(canvas.getHeight(), canvas.getWidth());
 
     for (final TrackedRecognition recognition : trackedObjects) {
       final RectF trackedPos = new RectF(recognition.location);
@@ -188,19 +189,21 @@ public class MultiBoxTracker {
 
       final String labelString =
           !TextUtils.isEmpty(recognition.title)
-              ? String.format("%s %.2f", recognition.title, (100 * recognition.detectionConfidence))
-              : String.format("%.2f", (100 * recognition.detectionConfidence));
+              ? String.format(
+                  Locale.US, "%s %.2f", recognition.title, (100 * recognition.detectionConfidence))
+              : String.format(Locale.US, "%.2f", 100 * recognition.detectionConfidence);
       borderedText.drawText(
           canvas, trackedPos.left + cornerSize, trackedPos.top, labelString + "%", boxPaint);
 
-//      if (recognition == trackedObjects.get(0)) {
-//        borderedText.drawText(
-//                canvas,
-//                trackedPos.left + cornerSize,
-//                trackedPos.top + 40.0f,
-//                String.format("%d", leftControl) + "," + String.format("%d", rightControl),
-//                boxPaint);
-//      }
+      //      if (recognition == trackedObjects.get(0)) {
+      //        borderedText.drawText(
+      //                canvas,
+      //                trackedPos.left + cornerSize,
+      //                trackedPos.top + 40.0f,
+      //                String.format(Locale.US, "%.2f", leftControl) + "," + String.format("%.2f",
+      // rightControl),
+      //                boxPaint);
+      //      }
     }
   }
 
@@ -236,7 +239,7 @@ public class MultiBoxTracker {
       rectsToTrack.add(new Pair<Float, Recognition>(result.getConfidence(), result));
     }
 
-    //Clear so objects don't stay if nothing detected.
+    // Clear so objects don't stay if nothing detected.
     trackedObjects.clear();
 
     if (rectsToTrack.isEmpty()) {
@@ -244,7 +247,7 @@ public class MultiBoxTracker {
       return;
     }
 
-    //trackedObjects.clear();
+    // trackedObjects.clear();
     for (final Pair<Float, Recognition> potential : rectsToTrack) {
       final TrackedRecognition trackedRecognition = new TrackedRecognition();
       trackedRecognition.detectionConfidence = potential.first;
@@ -265,5 +268,4 @@ public class MultiBoxTracker {
     int color;
     String title;
   }
-
 }

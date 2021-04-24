@@ -13,8 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-//Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
-
+// Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
 
 package org.openbot.tflite;
 
@@ -27,8 +26,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-
+import java.util.Locale;
+import java.util.PriorityQueue;
 
 /**
  * Wrapper for frozen detection models trained using the Tensorflow Object Detection API:
@@ -36,8 +37,15 @@ import java.util.List;
  */
 public abstract class Detector extends Network {
 
-   /** Labels corresponding to the output of the vision model. */
-   protected List<String> labels;
+  /** Labels corresponding to the output of the vision model. */
+  protected List<String> labels;
+
+  // Number of output detections
+  protected int NUM_DETECTIONS;
+
+  protected String modelPath;
+  protected int imageSizeX;
+  protected int imageSizeY;
 
   /**
    * Creates a detector with the provided configuration.
@@ -48,16 +56,16 @@ public abstract class Detector extends Network {
    * @param numThreads The number of threads to use for classification.
    * @return A detector with the desired configuration.
    */
-
-  public static Detector create (Activity activity, Model model, Device device, int numThreads)
+  public static Detector create(Activity activity, Model model, Device device, int numThreads)
       throws IOException {
-      switch (model) {
-        case DETECTOR_V1_1_0_Q:
-          return new DetectorQuantizedMobileNetV1(activity, device, numThreads);
-        case DETECTOR_V3_S_Q:
-          return new DetectorQuantizedMobileNetV3(activity, device, numThreads);
-        default:
-          return new DetectorQuantizedMobileNetV1(activity, device, numThreads);
+    switch (model.id) {
+      case MOBILENETV1_1_0_Q:
+      case MOBILENETV3_S_Q:
+        return new DetectorQuantizedMobileNet(activity, model, device, numThreads);
+      case YOLOV4:
+        return new DetectorFloatYoloV4(activity, model, device, numThreads);
+      default:
+        return null;
     }
   }
 
@@ -77,15 +85,23 @@ public abstract class Detector extends Network {
      */
     private final Float confidence;
 
-    /** Optional location within the source image for the location of the recognized object. */
+    /** Location within the source image for the location of the recognized object. */
     private RectF location;
 
+    /** Detected class of the recognized object. */
+    private int classId;
+
     public Recognition(
-        final String id, final String title, final Float confidence, final RectF location) {
+        final String id,
+        final String title,
+        final Float confidence,
+        final RectF location,
+        int classId) {
       this.id = id;
       this.title = title;
       this.confidence = confidence;
       this.location = location;
+      this.classId = classId;
     }
 
     public String getId() {
@@ -108,6 +124,10 @@ public abstract class Detector extends Network {
       this.location = location;
     }
 
+    public int getClassId() {
+      return classId;
+    }
+
     @Override
     public String toString() {
       String resultString = "";
@@ -120,7 +140,7 @@ public abstract class Detector extends Network {
       }
 
       if (confidence != null) {
-        resultString += String.format("(%.1f%%) ", confidence * 100.0f);
+        resultString += String.format(Locale.US, "(%.1f%%) ", confidence * 100.0f);
       }
 
       if (location != null) {
@@ -131,27 +151,31 @@ public abstract class Detector extends Network {
     }
   }
 
-    /** Initializes a {@code Detector}. */
-    protected Detector(Activity activity, Device device, int numThreads) throws IOException {
-      super(activity, device, numThreads);
-      labels = loadLabelList(activity);
-      LOGGER.d("Created a Tensorflow Lite Detector.");
-    }
-  
-    /** Reads label list from Assets. */
-    private List<String> loadLabelList(Activity activity) throws IOException {
-      List<String> labels = new ArrayList<String>();
-      BufferedReader reader =
-          new BufferedReader(new InputStreamReader(activity.getAssets().open(getLabelPath())));
-      String line;
-      while ((line = reader.readLine()) != null) {
-        labels.add(line);
-      }
-      reader.close();
-      return labels;
-    }
+  /** Initializes a {@code Detector}. */
+  protected Detector(Activity activity, Model model, Device device, int numThreads)
+      throws IOException {
+    super(activity, model, device, numThreads);
 
-  public List<Recognition> recognizeImage(final Bitmap bitmap) {
+    labels = loadLabelList(activity);
+    parseTflite();
+    LOGGER.d("Created a Tensorflow Lite Detector.");
+  }
+
+  /** Reads label list from Assets. */
+  private List<String> loadLabelList(Activity activity) throws IOException {
+    List<String> labels = new ArrayList<String>();
+    BufferedReader reader =
+        new BufferedReader(new InputStreamReader(activity.getAssets().open(getLabelPath())));
+    String line;
+    while ((line = reader.readLine()) != null) {
+      labels.add(line);
+    }
+    reader.close();
+    return labels;
+  }
+
+  public List<Recognition> recognizeImage(final Bitmap bitmap, String className)
+      throws IllegalArgumentException {
     // Log this method so that it can be analyzed with systrace.
     Trace.beginSection("recognizeImage");
 
@@ -166,16 +190,90 @@ public abstract class Detector extends Network {
 
     // Run the inference call.
     Trace.beginSection("runInference");
-    long startTime = SystemClock.uptimeMillis();
+    long startTime = SystemClock.elapsedRealtime();
     runInference();
-    //tflite.runForMultipleInputsOutputs(inputArray, outputMap);
-    long endTime = SystemClock.uptimeMillis();
+    long endTime = SystemClock.elapsedRealtime();
     Trace.endSection();
     LOGGER.v("Timecost to run model inference: " + (endTime - startTime));
 
-
     Trace.endSection(); // "recognizeImage"
-    return getRecognitions();
+    return getRecognitions(className);
+  }
+
+  protected float mNmsThresh = 0.25f;
+
+  // non maximum suppression
+  protected ArrayList<Recognition> nms(ArrayList<Recognition> list) {
+    ArrayList<Recognition> nmsList = new ArrayList<Recognition>();
+
+    for (int k = 0; k < labels.size(); k++) {
+      // 1. Find max confidence per class
+      PriorityQueue<Recognition> pq =
+          new PriorityQueue<Recognition>(
+              50,
+              new Comparator<Recognition>() {
+                @Override
+                public int compare(final Recognition lhs, final Recognition rhs) {
+                  // Intentionally reversed to put high confidence at the head of the queue.
+                  return Float.compare(rhs.getConfidence(), lhs.getConfidence());
+                }
+              });
+
+      for (int i = 0; i < list.size(); ++i) {
+        if (list.get(i).getClassId() == k) {
+          pq.add(list.get(i));
+        }
+      }
+
+      // 2. Do non maximum suppression
+      while (pq.size() > 0) {
+        // insert detection with max confidence
+        Recognition[] a = new Recognition[pq.size()];
+        Recognition[] detections = pq.toArray(a);
+        Recognition max = detections[0];
+        nmsList.add(max);
+        pq.clear();
+
+        for (int j = 1; j < detections.length; j++) {
+          Recognition detection = detections[j];
+          RectF b = detection.getLocation();
+          if (box_iou(max.getLocation(), b) < mNmsThresh) {
+            pq.add(detection);
+          }
+        }
+      }
+    }
+    return nmsList;
+  }
+
+  protected float box_iou(RectF a, RectF b) {
+    return box_intersection(a, b) / box_union(a, b);
+  }
+
+  protected float box_intersection(RectF a, RectF b) {
+    float w =
+        overlap((a.left + a.right) / 2, a.right - a.left, (b.left + b.right) / 2, b.right - b.left);
+    float h =
+        overlap((a.top + a.bottom) / 2, a.bottom - a.top, (b.top + b.bottom) / 2, b.bottom - b.top);
+    if (w < 0 || h < 0) return 0;
+    float area = w * h;
+    return area;
+  }
+
+  protected float box_union(RectF a, RectF b) {
+    float i = box_intersection(a, b);
+    float u = (a.right - a.left) * (a.bottom - a.top) + (b.right - b.left) * (b.bottom - b.top) - i;
+    return u;
+  }
+
+  protected float overlap(float x1, float w1, float x2, float w2) {
+    float l1 = x1 - w1 / 2;
+    float l2 = x2 - w2 / 2;
+    float left = l1 > l2 ? l1 : l2;
+    float r1 = x1 + w1 / 2;
+    float r2 = x2 + w2 / 2;
+    float right = r1 < r2 ? r1 : r2;
+    return right - left;
   }
 
   /**
@@ -184,31 +282,6 @@ public abstract class Detector extends Network {
    * @return
    */
   protected abstract String getLabelPath();
-
-  /**
-   * Read the probability value for the specified label This is either the original value as it was
-   * read from the net's output or the updated value after the filter was applied.
-   *
-   * @param labelIndex
-   * @return
-   */
-  protected abstract float getProbability(int labelIndex);
-
-  /**
-   * Set the probability value for the specified label.
-   *
-   * @param labelIndex
-   * @param value
-   */
-  protected abstract void setProbability(int labelIndex, Number value);
-
-  /**
-   * Get the normalized probability value for the specified label. This is the final value as it
-   * will be shown to the user.
-   *
-   * @return
-   */
-  protected abstract float getNormalizedProbability(int labelIndex);
 
   /**
    * Run inference using the prepared input in {@link #imgData}. Afterwards, the result will be
@@ -235,6 +308,11 @@ public abstract class Detector extends Network {
     return labels.size();
   }
 
+  public List<String> getLabels() {
+    List<String> list = new ArrayList<>();
+    for (String label : labels) if (!label.equals("???")) list.add(label);
+    return list;
+  }
   /**
    * Get the number of detections.
    *
@@ -242,11 +320,13 @@ public abstract class Detector extends Network {
    */
   protected abstract int getNumDetections();
 
+  /** Get specs from tflite file */
+  protected abstract void parseTflite();
+
   /**
    * Get the recognitions.
    *
    * @return
    */
-  protected abstract List<Recognition> getRecognitions();
-
+  protected abstract List<Recognition> getRecognitions(String className);
 }

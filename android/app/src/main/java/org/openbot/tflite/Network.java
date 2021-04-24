@@ -13,18 +13,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-//Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
+// Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
 
 package org.openbot.tflite;
+
 import android.app.Activity;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.RectF;
 import android.os.SystemClock;
-
-import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.gpu.GpuDelegate;
-
+import android.util.Size;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -33,39 +32,34 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.HashMap;
 import java.util.Map;
-
+import org.jetbrains.annotations.NotNull;
 import org.openbot.env.Logger;
+import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.gpu.GpuDelegate;
 
 public abstract class Network {
 
   protected static final Logger LOGGER = new Logger();
 
-  /** The model. */
-  public enum Model {
-    DETECTOR_V1_1_0_Q,
-    DETECTOR_V3_S_Q,
-    AUTOPILOT_F,
-  }
-
   /** The runtime device type used for execution. */
   public enum Device {
     CPU,
-    NNAPI,
-    GPU
+    GPU,
+    NNAPI
   }
 
   /** Dimensions of inputs. */
   protected static final int DIM_BATCH_SIZE = 1;
+
   protected static final int DIM_PIXEL_SIZE = 3;
 
+  private final Size imageSize;
+
   /** Preallocated buffers for storing image data in. */
-  protected final int[] intValues = new int[getImageSizeX() * getImageSizeY()];
+  protected final int[] intValues;
 
   /** Options for configuring the Interpreter. */
   protected final Interpreter.Options tfliteOptions = new Interpreter.Options();
-
-  /** The loaded TensorFlow Lite model. */
-  protected MappedByteBuffer tfliteModel;
 
   /** Optional GPU delegate for accleration. */
   protected GpuDelegate gpuDelegate = null;
@@ -79,9 +73,12 @@ public abstract class Network {
   protected Map<Integer, Object> outputMap = new HashMap<>();
 
   /** Initializes a {@code Network}. */
-  protected Network(Activity activity, Device device, int numThreads) throws IOException {
+  protected Network(Activity activity, Model model, Device device, int numThreads)
+      throws IOException {
 
-    tfliteModel = loadModelFile(activity);
+    imageSize = model.inputSize;
+    intValues = new int[getImageSizeX() * getImageSizeY()];
+
     switch (device) {
       case NNAPI:
         tfliteOptions.setUseNNAPI(true);
@@ -94,21 +91,36 @@ public abstract class Network {
         break;
     }
     tfliteOptions.setNumThreads(numThreads);
-    tflite = new Interpreter(tfliteModel, tfliteOptions);
+
+    if (model.filePath != null) {
+      File modelFile = getModelFile(activity, model);
+      tflite = new Interpreter(modelFile, tfliteOptions);
+    } else if (model.assetPath != null) {
+      MappedByteBuffer tfliteModel = loadModelFile(activity, model);
+      tflite = new Interpreter(tfliteModel, tfliteOptions);
+    } else {
+      throw (new IOException("No model file specified!"));
+    }
+
     imgData =
-            ByteBuffer.allocateDirect(
-                    DIM_BATCH_SIZE
-                            * getImageSizeX()
-                            * getImageSizeY()
-                            * DIM_PIXEL_SIZE
-                            * getNumBytesPerChannel());
+        ByteBuffer.allocateDirect(
+            DIM_BATCH_SIZE
+                * getImageSizeX()
+                * getImageSizeY()
+                * DIM_PIXEL_SIZE
+                * getNumBytesPerChannel());
     imgData.order(ByteOrder.nativeOrder());
     LOGGER.d("Created a Tensorflow Lite Network.");
   }
 
+  @NotNull
+  private File getModelFile(Activity activity, Model model) {
+    return new File(activity.getFilesDir() + File.separator + model.filePath);
+  }
+
   /** Memory-map the model file in Assets. */
-  protected MappedByteBuffer loadModelFile(Activity activity) throws IOException {
-    AssetFileDescriptor fileDescriptor = activity.getAssets().openFd(getModelPath());
+  protected MappedByteBuffer loadModelFile(Activity activity, Model model) throws IOException {
+    AssetFileDescriptor fileDescriptor = activity.getAssets().openFd(model.assetPath);
     FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
     FileChannel fileChannel = inputStream.getChannel();
     long startOffset = fileDescriptor.getStartOffset();
@@ -125,17 +137,16 @@ public abstract class Network {
     bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
     // Convert the image to floating point.
     int pixel = 0;
-    long startTime = SystemClock.uptimeMillis();
+    long startTime = SystemClock.elapsedRealtime();
     for (int i = 0; i < getImageSizeX(); ++i) {
       for (int j = 0; j < getImageSizeY(); ++j) {
         final int val = intValues[pixel++];
         addPixelValue(val);
       }
     }
-    long endTime = SystemClock.uptimeMillis();
+    long endTime = SystemClock.elapsedRealtime();
     LOGGER.v("Timecost to put values into ByteBuffer: " + (endTime - startTime));
   }
-
 
   /** Closes the interpreter and model to release resources. */
   public void close() {
@@ -147,7 +158,6 @@ public abstract class Network {
       gpuDelegate.close();
       gpuDelegate = null;
     }
-    tfliteModel = null;
   }
 
   /**
@@ -155,21 +165,18 @@ public abstract class Network {
    *
    * @return
    */
-  public abstract int getImageSizeX();
+  public int getImageSizeX() {
+    return imageSize.getWidth();
+  }
 
   /**
    * Get the image size along the y axis.
    *
    * @return
    */
-  public abstract int getImageSizeY();
-
-  /**
-   * Get the name of the model file stored in Assets.
-   *
-   * @return
-   */
-  protected abstract String getModelPath();
+  public int getImageSizeY() {
+    return imageSize.getHeight();
+  }
 
   /**
    * Get the number of bytes that is used to store a single color channel value.
@@ -198,5 +205,4 @@ public abstract class Network {
    * @return
    */
   public abstract RectF getCropRect();
-
 }

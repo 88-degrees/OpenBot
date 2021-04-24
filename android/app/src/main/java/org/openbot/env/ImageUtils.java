@@ -13,14 +13,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-//Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
+// Modified by Matthias Mueller - Intel Intelligent Systems Lab - 2020
 
 package org.openbot.env;
 
+import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.RectF;
-
+import android.view.Surface;
 import java.io.File;
 import java.io.FileOutputStream;
 
@@ -172,11 +173,14 @@ public class ImageUtils {
 
     if (applyRotation != 0) {
       // Translate for crop.
-      matrix.postTranslate((cropRect.bottom-cropRect.top) * srcHeight, (cropRect.right-cropRect.left) * srcWidth);
-    }
-    else {
+      matrix.postTranslate(
+          (cropRect.bottom - cropRect.top) * srcHeight,
+          (cropRect.right - cropRect.left) * srcWidth);
+    } else {
       // Translate for crop.
-      matrix.postTranslate((cropRect.right-cropRect.left) * srcWidth, (cropRect.bottom-cropRect.top) * srcHeight);
+      matrix.postTranslate(
+          (cropRect.right - cropRect.left) * srcWidth,
+          (cropRect.bottom - cropRect.top) * srcHeight);
     }
 
     if (applyRotation != 0) {
@@ -220,5 +224,19 @@ public class ImageUtils {
     }
 
     return matrix;
+  }
+
+  public static int getScreenOrientation(Activity activity) {
+    switch (activity.getDisplay().getRotation()) {
+      case Surface.ROTATION_270:
+        return 270;
+      case Surface.ROTATION_180:
+        return 180;
+      case Surface.ROTATION_90:
+        return 90;
+      case Surface.ROTATION_0:
+      default:
+        return 0;
+    }
   }
 }
