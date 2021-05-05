@@ -98,13 +98,14 @@ import org.openbot.server.ServerCommunication;
 import org.openbot.server.ServerListener;
 import org.openbot.tflite.Model;
 import org.openbot.tflite.Network.Device;
+import org.openbot.utils.ConnectionUtils;
 import org.openbot.utils.Constants;
 import org.openbot.utils.Enums;
 import org.openbot.utils.Enums.ControlMode;
 import org.openbot.utils.Enums.DriveMode;
 import org.openbot.utils.Enums.LogMode;
 import org.openbot.utils.Enums.SpeedMode;
-import org.openbot.utils.Utils;
+import org.openbot.utils.FormatUtils;
 import org.zeroturnaround.zip.ZipUtil;
 import org.zeroturnaround.zip.commons.FileUtils;
 import timber.log.Timber;
@@ -123,7 +124,7 @@ public abstract class CameraActivity extends AppCompatActivity
   // Constants
   private static final int REQUEST_CAMERA_PERMISSION = 1;
   private static final int REQUEST_LOCATION_PERMISSION_LOGGING = 2;
-  private static final int REQUEST_LOCATION_AND_AUDIO_PERMISSION_CONTROLLER = 3;
+  private static final int REQUEST_CONTROLLER_PERMISSIONS = 3;
   private static final int REQUEST_STORAGE_PERMISSION = 4;
   private static final int REQUEST_BLUETOOTH_PERMISSION = 5;
 
@@ -193,7 +194,7 @@ public abstract class CameraActivity extends AppCompatActivity
   private ServerCommunication serverCommunication;
   private SharedPreferencesManager preferencesManager;
   protected final GameController gameController = new GameController(driveMode);
-  private final PhoneController phoneController = PhoneController.getInstance();
+  private PhoneController phoneController;
   protected final ControllerHandler controllerHandler = new ControllerHandler();
   private final AudioPlayer audioPlayer = new AudioPlayer(this);
   private final String voice = "matthew";
@@ -208,6 +209,8 @@ public abstract class CameraActivity extends AppCompatActivity
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     //    vehicle = new Vehicle(this, baudRate);
     vehicle = OpenBotApplication.vehicle;
+
+    phoneController = PhoneController.getInstance(this);
 
     setContentView(R.layout.activity_camera);
     Toolbar toolbar = findViewById(R.id.toolbar);
@@ -367,16 +370,16 @@ public abstract class CameraActivity extends AppCompatActivity
                   sendVehicleDataToSensorService(timestamp, data);
                   String[] itemList = data.split(",");
                   if (itemList.length == 4) {
-                    if (Utils.isNumeric(itemList[0]))
+                    if (FormatUtils.isNumeric(itemList[0]))
                       vehicle.setBatteryVoltage(Float.parseFloat(itemList[0]));
 
-                    if (Utils.isNumeric(itemList[1]))
+                    if (FormatUtils.isNumeric(itemList[1]))
                       vehicle.setLeftWheelTicks(Float.parseFloat(itemList[1]));
 
-                    if (Utils.isNumeric(itemList[2]))
+                    if (FormatUtils.isNumeric(itemList[2]))
                       vehicle.setRightWheelTicks(Float.parseFloat(itemList[2]));
 
-                    if (Utils.isNumeric(itemList[3]))
+                    if (FormatUtils.isNumeric(itemList[3]))
                       vehicle.setSonarReading(Float.parseFloat(itemList[3]));
                     runOnUiThread(
                         () -> {
@@ -655,7 +658,8 @@ public abstract class CameraActivity extends AppCompatActivity
           setFragment();
         } else {
           if (ActivityCompat.shouldShowRequestPermissionRationale(this, PERMISSION_CAMERA)) {
-            Toast.makeText(this, R.string.camera_permission_denied, Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.camera_permission_denied_logging, Toast.LENGTH_LONG)
+                .show();
           }
           // requestCameraPermission();
         }
@@ -674,7 +678,7 @@ public abstract class CameraActivity extends AppCompatActivity
         }
         break;
 
-      case REQUEST_LOCATION_AND_AUDIO_PERMISSION_CONTROLLER:
+      case REQUEST_CONTROLLER_PERMISSIONS:
         // If the permission is granted, start advertising to controller,
         // otherwise, show a Toast
         if (grantResults.length > 1
@@ -691,6 +695,10 @@ public abstract class CameraActivity extends AppCompatActivity
                     this, R.string.record_audio_permission_denied_controller, Toast.LENGTH_LONG)
                 .show();
           }
+          if (ActivityCompat.shouldShowRequestPermissionRationale(this, PERMISSION_CAMERA)) {
+            Toast.makeText(this, R.string.camera_permission_denied_logging, Toast.LENGTH_LONG)
+                .show();
+          }
         }
         break;
 
@@ -701,7 +709,8 @@ public abstract class CameraActivity extends AppCompatActivity
           setIsLoggingActive(true);
         } else {
           if (ActivityCompat.shouldShowRequestPermissionRationale(this, PERMISSION_STORAGE)) {
-            Toast.makeText(this, R.string.storage_permission_denied, Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.storage_permission_denied_logging, Toast.LENGTH_LONG)
+                .show();
           }
         }
         break;
@@ -745,8 +754,8 @@ public abstract class CameraActivity extends AppCompatActivity
   private void requestPermissionsLocationAndAudioController() {
     ActivityCompat.requestPermissions(
         this,
-        new String[] {PERMISSION_LOCATION, PERMISSION_AUDIO},
-        REQUEST_LOCATION_AND_AUDIO_PERMISSION_CONTROLLER);
+        new String[] {PERMISSION_LOCATION, PERMISSION_AUDIO, PERMISSION_CAMERA},
+        REQUEST_CONTROLLER_PERMISSIONS);
   }
 
   private void requestStoragePermission() {
@@ -976,7 +985,8 @@ public abstract class CameraActivity extends AppCompatActivity
       preferencesManager.setDriveMode(driveMode.getValue());
       gameController.setDriveMode(driveMode);
       driveModeSpinner.setSelection(driveMode.ordinal());
-      BotToControllerEventBus.emitEvent(Utils.createStatus("DRIVE_MODE", driveMode.toString()));
+      BotToControllerEventBus.emitEvent(
+          ConnectionUtils.createStatus("DRIVE_MODE", driveMode.toString()));
     }
   }
 
@@ -1181,7 +1191,7 @@ public abstract class CameraActivity extends AppCompatActivity
       stopLogging();
       loggingEnabled = false;
     }
-    BotToControllerEventBus.emitEvent(Utils.createStatus("LOGS", loggingEnabled));
+    BotToControllerEventBus.emitEvent(ConnectionUtils.createStatus("LOGS", loggingEnabled));
 
     logSpinner.setEnabled(!loggingEnabled);
     if (loggingEnabled) logSpinner.setAlpha(0.5f);
@@ -1375,14 +1385,13 @@ public abstract class CameraActivity extends AppCompatActivity
               // Other controllers can subscribe to this event as well.
               // That is why we are not calling phoneController.send() here directly.
               BotToControllerEventBus.emitEvent(
-                  Utils.getStatus(
+                  ConnectionUtils.getStatus(
                       loggingEnabled,
                       noiseEnabled,
                       networkEnabled,
                       driveMode.toString(),
                       vehicle.getIndicator()));
 
-              // phoneController.startVideo();
               break;
 
             case "DISCONNECTED":
@@ -1398,9 +1407,9 @@ public abstract class CameraActivity extends AppCompatActivity
   }
 
   private void sendIndicatorStatus(Integer status) {
-    BotToControllerEventBus.emitEvent(Utils.createStatus("INDICATOR_LEFT", status == -1));
-    BotToControllerEventBus.emitEvent(Utils.createStatus("INDICATOR_RIGHT", status == 1));
-    BotToControllerEventBus.emitEvent(Utils.createStatus("INDICATOR_STOP", status == 0));
+    BotToControllerEventBus.emitEvent(ConnectionUtils.createStatus("INDICATOR_LEFT", status == -1));
+    BotToControllerEventBus.emitEvent(ConnectionUtils.createStatus("INDICATOR_RIGHT", status == 1));
+    BotToControllerEventBus.emitEvent(ConnectionUtils.createStatus("INDICATOR_STOP", status == 0));
   }
 
   // Controller event handler

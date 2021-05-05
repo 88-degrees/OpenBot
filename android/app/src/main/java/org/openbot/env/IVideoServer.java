@@ -2,9 +2,16 @@ package org.openbot.env;
 
 import android.content.Context;
 import android.view.SurfaceView;
+import android.view.TextureView;
 
 public interface IVideoServer {
+  void startServer();
+
   void stopServer();
+
+  void setResolution(int w, int h);
+
+  void setConnected(boolean connected);
 
   void init(Context context);
 
@@ -17,4 +24,8 @@ public interface IVideoServer {
   void sendVideoStoppedStatus();
 
   void setView(SurfaceView view);
+
+  void setView(TextureView view);
+
+  void setView(com.pedro.rtplibrary.view.OpenGlView view);
 }
